@@ -205,10 +205,13 @@ void HttpServer::onMessage(const TcpConnectionPtr &conn, MsgBuffer *buf)
                 // through conn. (This response won't go through pre-sending
                 // aop, maybe we should change this behavior).
                 auto code = static_cast<HttpStatusCode>(-parseRes);
-                conn->send(utils::formattedString(
-                    "HTTP/1.1 %d %s\r\nConnection: close\r\n\r\n",
-                    code,
-                    statusCodeToString(code).data()));
+                auto resp = app().getCustomErrorHandler()(code, req);
+                resp->setVersion(req->getVersion());
+                resp->setCloseConnection(true);
+                auto httpString =
+                    static_cast<HttpResponseImpl *>(resp.get())
+                        ->renderToBuffer();
+                conn->send(httpString);
             }
             buf->retrieveAll();
             // stop parser to ignore following illegal data from client
