@@ -14,6 +14,16 @@ option(BUILD_BROTLI "Build Brotli" ON)
 option(BUILD_YAML_CONFIG "Build yaml config" ON)
 option(USE_SUBMODULE "Use trantor as a submodule" ON)
 option(USE_STATIC_LIBS_ONLY "Use only static libraries as dependencies" OFF)
+option(DROGON_BUILD_BUNDLED_JSONCPP
+       "Download, build, and install the JsonCpp version pinned by Drogon"
+       OFF)
+
+set(DROGON_JSONCPP_URL
+    "https://github.com/open-source-parsers/jsoncpp/archive/refs/tags/1.9.6.tar.gz"
+    CACHE STRING "URL of the JsonCpp 1.9.6 source archive")
+set(DROGON_JSONCPP_SHA256
+    "f93b6dd7ce796b13d02c108bc9f79812245a82e577581c4c9aabe57075c90ea2"
+    CACHE STRING "SHA256 hash of the JsonCpp 1.9.6 source archive")
 
 include(CMakeDependentOption)
 CMAKE_DEPENDENT_OPTION(BUILD_POSTGRESQL "Build with postgresql support" ON "BUILD_ORM" OFF)
@@ -189,8 +199,32 @@ endif()
 
 
 # jsoncpp
-find_package(Jsoncpp REQUIRED)
-target_link_libraries(${PROJECT_NAME} PUBLIC Jsoncpp_lib)
+if(DROGON_BUILD_BUNDLED_JSONCPP)
+    include(FetchContent)
+    set(JSONCPP_WITH_TESTS OFF CACHE BOOL "Build JsonCpp tests" FORCE)
+    set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL "Run JsonCpp post-build tests" FORCE)
+    set(JSONCPP_WITH_EXAMPLE OFF CACHE BOOL "Build JsonCpp examples" FORCE)
+    set(JSONCPP_WITH_PKGCONFIG_SUPPORT OFF CACHE BOOL "Install JsonCpp pkg-config metadata" FORCE)
+    set(JSONCPP_WITH_CMAKE_PACKAGE ON CACHE BOOL "Install the JsonCpp CMake package" FORCE)
+    set(BUILD_STATIC_LIBS ON CACHE BOOL "Build the JsonCpp static library" FORCE)
+    set(BUILD_OBJECT_LIBS OFF CACHE BOOL "Build the JsonCpp object library" FORCE)
+    FetchContent_Declare(
+        drogon_jsoncpp
+        URL "${DROGON_JSONCPP_URL}"
+        URL_HASH "SHA256=${DROGON_JSONCPP_SHA256}"
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    FetchContent_MakeAvailable(drogon_jsoncpp)
+
+    # JsonCpp defines its namespaced target in a separate compatibility file.
+    # Use that target so the installed Drogon export can resolve it through the
+    # co-installed JsonCpp config package instead of a build-tree path.
+    include("${drogon_jsoncpp_SOURCE_DIR}/jsoncpp-namespaced-targets.cmake")
+    set(JSONCPP_INCLUDE_DIRS "${drogon_jsoncpp_SOURCE_DIR}/include")
+    target_link_libraries(${PROJECT_NAME} PUBLIC JsonCpp::JsonCpp)
+else()
+    find_package(Jsoncpp REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PUBLIC Jsoncpp_lib)
+endif()
 list(APPEND INCLUDE_DIRS_FOR_DYNAMIC_VIEW ${JSONCPP_INCLUDE_DIRS})
 
 # yamlcpp
